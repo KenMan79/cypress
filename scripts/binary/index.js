@@ -19,7 +19,8 @@ const zip = require('./zip')
 const ask = require('./ask')
 const bump = require('./bump')
 const meta = require('./meta')
-const build = require('./build')
+// const build = require('./build')
+const buildNew = require('./build-new')
 const upload = require('./upload')
 const uploadUtils = require('./util/upload')
 const { uploadNpmPackage } = require('./upload-npm-package')
@@ -71,12 +72,7 @@ const deploy = {
 
   parseOptions (argv) {
     const opts = minimist(argv, {
-      boolean: ['skip-clean'],
-      default: {
-        'skip-clean': false,
-      },
       alias: {
-        skipClean: 'skip-clean',
         zip: ['zipFile', 'zip-file', 'filename'],
       },
     })
@@ -238,7 +234,7 @@ const deploy = {
     .then(() => {
       debug('building binary: platform %s version %s', options.platform, options.version)
 
-      return build(options.platform, options.version, options)
+      return buildNew.buildCypressApp(options.platform, options.version, options)
     })
   },
 

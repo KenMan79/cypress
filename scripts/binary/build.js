@@ -40,7 +40,7 @@ const logBuiltAllPackages = () => {
 // can pass options to better control the build
 // for example
 //   skipClean - do not delete "dist" folder before build
-const buildCypressApp = function (platform, version, options = {}) {
+const buildCypressApp = function (platform, version) {
   la(check.unemptyString(version), 'missing version to build', version)
 
   const distDir = _.partial(meta.distDir, platform)
@@ -92,12 +92,6 @@ const buildCypressApp = function (platform, version, options = {}) {
 
   const cleanupPlatform = function () {
     log('#cleanupPlatform')
-
-    if (options.skipClean) {
-      log('skipClean')
-
-      return
-    }
 
     const cleanup = function () {
       const dir = distDir()
