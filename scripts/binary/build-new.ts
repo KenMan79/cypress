@@ -16,8 +16,7 @@ import { transformRequires } from './util/transform-requires'
 import execa from 'execa'
 import { PlatformName } from '@packages/launcher'
 import { testStaticAssets } from './util/testStaticAssets'
-
-const EARLY_OUT = true
+// import performanceTracking from '../../packages/server/test/support/helpers/performance.js'
 
 const CY_ROOT_DIR = path.join(__dirname, '..', '..')
 
@@ -137,10 +136,10 @@ require('./packages/server')\
   await transformRequires(distDir())
 
   log(`#testVersion ${distDir()}`)
-  testVersion(distDir(), platform, version)
+  await testVersion(distDir(), platform, version)
 
   // testBuiltStaticAssets
-  testStaticAssets(distDir())
+  await testStaticAssets(distDir())
 
   log('#removeCyAndBinFolders')
   await del([
@@ -189,9 +188,13 @@ require('./packages/server')\
   console.log('electron-builder arguments:')
   console.log(args.join(' '))
 
-  await execa('electron-builder', args, {
-    stdio: 'inherit',
-  })
+  try {
+    await execa('electron-builder', args, {
+      stdio: 'inherit',
+    })
+  } catch (e) {
+    console.error(e)
+  }
 
   // lsDistFolder
   console.log('in build folder %s', meta.buildDir(platform))
@@ -201,11 +204,7 @@ require('./packages/server')\
   console.log(stdout)
 
   // testVersion(buildAppDir)
-  testVersion(meta.buildAppDir(platform), platform, version)
-
-  if (EARLY_OUT) {
-    return
-  }
+  await testVersion(meta.buildAppDir(platform), platform, version)
 
   // runSmokeTests
   let usingXvfb = xvfb.isNeeded()
@@ -217,7 +216,7 @@ require('./packages/server')\
 
     const executablePath = meta.buildAppExecutable(platform)
 
-    smoke.test(executablePath)
+    await smoke.test(executablePath)
   } finally {
     if (usingXvfb) {
       await xvfb.stop()
@@ -244,7 +243,41 @@ require('./packages/server')\
     })
   }
 
-  // printPackageSizes
+  if (platform === 'win32') {
+    return
+  }
+
+  log(`#printPackageSizes ${appFolder}`)
+
+  // "du" - disk usage utility
+  // -d -1 depth of 1
+  // -h human readable sizes (K and M)
+  const diskUsageResult = await execa('du', ['-d', '1', appFolder])
+
+  const lines = diskUsageResult.stdout.split(os.EOL)
+
+  // will store {package name: package size}
+  const data = {}
+
+  lines.forEach((line) => {
+    const parts = line.split('\t')
+    const packageSize = parseFloat(parts[0])
+    const folder = parts[1]
+
+    const packageName = path.basename(folder)
+
+    if (packageName === 'packages') {
+      return // root "packages" information
+    }
+
+    data[packageName] = packageSize
+  })
+
+  const sizes = _.fromPairs(_.sortBy(_.toPairs(data), 1))
+
+  console.log(sizes)
+
+  // performanceTracking.track('test runner size', sizes)
 }
 
 function getIconFilename (platform: PlatformName) {
@@ -267,16 +300,16 @@ async function testVersion (dir: string, platform: PlatformName, version: string
   console.log('by calling: node index.js --version')
   console.log('in the folder %s', dir)
 
-  const { stdout } = await execa('node', ['index.js', '--version'], {
+  const result = await execa('node', ['index.js', '--version'], {
     cwd: dir,
   })
 
-  la(stdout, 'missing output when getting built version', result)
+  la(result.stdout, 'missing output when getting built version', result)
 
   console.log('app in %s', dir)
-  console.log('built app version', stdout)
-  la(stdout === version, 'different version reported',
-    stdout, 'from input version to build', version)
+  console.log('built app version', result.stdout)
+  la(result.stdout === version, 'different version reported',
+    result.stdout, 'from input version to build', version)
 
   console.log('✅ using node --version works')
 }
